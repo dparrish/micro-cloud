@@ -6,13 +6,6 @@ SMARTGPU lcd;
 
 #define DEMO_MODE
 
-#define ICON_NONE 0
-#define ICON_HOME 1
-#define ICON_BOOK 2
-#define ICON_MESG 3
-#define ICON_CAMERA 4
-#define ICON_PC 5
-
 #define STATUS_DOWN 0
 #define STATUS_UP 1
 
@@ -24,15 +17,21 @@ SMARTGPU lcd;
 #define GRAPH_SEPARATION 20
 #define REFRESH_INTERVAL 1000
 
+const char icon_name_home[] PROGMEM = "HOME";
+const char icon_name_book[] PROGMEM = "BOOK";
+const char icon_name_mesg[] PROGMEM = "MESG";
+const char icon_name_camera[] PROGMEM = "CAME";
+const char icon_name_pc[] PROGMEM = "PCMO";
+
 const char machine_name_0[] PROGMEM = "udoo-1";
 const char machine_name_1[] PROGMEM = "udoo-2";
 const char machine_name_2[] PROGMEM = "udoo-3";
 const char *const machine_names[] PROGMEM = {machine_name_0, machine_name_1, machine_name_2};
 
-const char graph_name_0[] PROGMEM = "CPU";
-const char graph_name_1[] PROGMEM = "Requests";
-const char graph_name_2[] PROGMEM = "Disk";
-const char *const graph_titles[] PROGMEM = {graph_name_0, graph_name_1, graph_name_2};
+const char graph_title_0[] PROGMEM = "CPU";
+const char graph_title_1[] PROGMEM = "Requests";
+const char graph_title_2[] PROGMEM = "Disk";
+const char *const graph_titles[] PROGMEM = {graph_title_0, graph_title_1, graph_title_2};
 
 int graph_data_head = {POINTS - 1};
 uint8_t graph_data[NUM_GRAPHS][MACHINES][POINTS] = {0};
@@ -41,43 +40,25 @@ uint8_t machine_status[MACHINES] = {0};
 
 unsigned long long last_refresh = 0;
 
-uint8_t checkIconTouch() {
-  char iconbuf[4] = {0};
-  if (lcd.touchIcon(iconbuf)) {
-    if (strncmp(iconbuf, "HOME", 4) == 0) {
-      return ICON_HOME;
-    } else if (strncmp(iconbuf, "BOOK", 4) == 0) {
-      return ICON_BOOK;
-    } else if (strncmp(iconbuf, "MESG", 4) == 0) {
-      return ICON_MESG;
-    } else if (strncmp(iconbuf, "CAME", 4) == 0) {
-      return ICON_CAMERA;
-    } else if (strncmp(iconbuf, "PCMO", 4) == 0) {
-      return ICON_PC;
-    }
-  }
-  return ICON_NONE;
-}
-
 void drawGraphs() {
   for (uint8_t machine = 0; machine < MACHINES; machine++) {
     int top = (GRAPH_SEPARATION * 2) + (machine * GRAPH_HEIGHT + machine * GRAPH_SEPARATION);
-    int bottom = top + GRAPH_HEIGHT;
+    int bottom = top + GRAPH_HEIGHT - 1;
 
     int j = 1;
     for (int i = graph_data_head; i < POINTS; i++) {
       uint8_t height = ((float)graph_data[current_graph][machine][i] / 100.0) * (GRAPH_HEIGHT / 2);
       if (height) {
-        lcd.drawRectangle(j, bottom - 1 - height, j + BAR_WIDTH, bottom - 1, BLUE, FILL);
-        lcd.drawRectangle(j, top + 1, j + BAR_WIDTH, bottom - 1 - height, BLACK, FILL);
+        lcd.drawRectangle(j, bottom - height, j + BAR_WIDTH, bottom, BLUE, FILL);
+        lcd.drawRectangle(j, top + 1, j + BAR_WIDTH, bottom - height, BLACK, FILL);
       }
       j += BAR_WIDTH;
     }
     for (int i = 0; i < graph_data_head; i++) {
       uint8_t height = ((float)graph_data[current_graph][machine][i] / 100.0) * (GRAPH_HEIGHT / 2);
       if (height) {
-        lcd.drawRectangle(j, bottom - 1 - height, j + BAR_WIDTH, bottom - 1, BLUE, FILL);
-        lcd.drawRectangle(j, top + 1, j + BAR_WIDTH, bottom - 1 - height, BLACK, FILL);
+        lcd.drawRectangle(j, bottom - height, j + BAR_WIDTH, bottom, BLUE, FILL);
+        lcd.drawRectangle(j, top + 1, j + BAR_WIDTH, bottom - height, BLACK, FILL);
       }
       j += BAR_WIDTH;
     }
@@ -147,6 +128,8 @@ void setup() {
   lcd.start();
   lcd.baudChange(2000000);
   lcd.orientation(PORTRAITL);
+
+  // Clear the memory used to store graph data.
   memset(graph_data, 0, NUM_GRAPHS * MACHINES * POINTS);
   drawHome();
 }
@@ -158,6 +141,7 @@ void loop() {
     for (uint8_t k = 0; k < NUM_GRAPHS; k++) {
       for (uint8_t machine = 0; machine < MACHINES; machine++) {
 #ifdef DEMO_MODE
+        // Demo mode adds a random number every data point.
         graph_data[k][machine][graph_data_head] = random(0, 100);
 #endif
       }
@@ -168,6 +152,7 @@ void loop() {
     last_refresh = millis();
 
 #ifdef DEMO_MODE
+    // Demo mode marks machines as UP after a few seconds.
     if (millis() > 5000 && millis() < 7000) updateMachineStatus(1, STATUS_UP);
     if (millis() > 6000 && millis() < 8000) updateMachineStatus(0, STATUS_UP);
     if (millis() > 7000 && millis() < 9000) updateMachineStatus(2, STATUS_UP);
@@ -182,26 +167,22 @@ void loop() {
     }
   }
 
-  switch (checkIconTouch()) {
-    case ICON_NONE:
-      break;
-    case ICON_HOME:
+  // Check if the user has touched one of the icons
+  char iconbuf[4] = {0};
+  if (lcd.touchIcon(iconbuf)) {
+    if (strncmp_P(iconbuf, icon_name_home, 4) == 0) {
       if (current_graph > -1) {
         current_graph = -1;
         drawHome();
       }
-      break;
-    case ICON_BOOK:
+    } else if (strncmp_P(iconbuf, icon_name_book, 4) == 0) {
       showGraph(0);
-      break;
-    case ICON_MESG:
+    } else if (strncmp_P(iconbuf, icon_name_mesg, 4) == 0) {
       showGraph(1);
-      break;
-    case ICON_CAMERA:
+    } else if (strncmp_P(iconbuf, icon_name_camera, 4) == 0) {
       showGraph(2);
-      break;
-    case ICON_PC:
+    } else if (strncmp_P(iconbuf, icon_name_pc, 4) == 0) {
       showGraph(-1);
-      break;
+    }
   }
 }
